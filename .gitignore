@@ -13,3 +13,4 @@ dist/
 # generated deliverable (rebuilt by scripts/build_submission.py)
 submission.pdf
 pdf-pages/
+submission.html
