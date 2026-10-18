@@ -1,0 +1,44 @@
+{
+  "description": "Simulated VPC placement for the risk scoring service task. The task sits in the private application subnet, accepts no inbound traffic, and may egress only to the private model endpoint subnet on the model port. This is a simulated placement document; no cloud account exists.",
+  "vpc": {"id": "vpc-0fde9001", "cidr": "10.9.0.0/16"},
+  "subnets": [
+    {
+      "id": "subnet-0fde9001public",
+      "cidr": "10.9.0.0/24",
+      "public": true,
+      "purpose": "reserved for a future public entry point; the risk scoring task must never be placed here"
+    },
+    {
+      "id": "subnet-0fde9001app",
+      "cidr": "10.9.1.0/24",
+      "public": false,
+      "purpose": "private application subnet hosting the risk scoring task"
+    },
+    {
+      "id": "subnet-0fde9001model",
+      "cidr": "10.9.2.0/24",
+      "public": false,
+      "purpose": "private model subnet hosting the Ollama endpoint (simulated managed model service)"
+    }
+  ],
+  "security_groups": [
+    {
+      "id": "sg-0fde9001risk",
+      "description": "risk scoring task: no ingress, single-purpose egress to the model endpoint",
+      "ingress": [],
+      "egress": [
+        {
+          "protocol": "tcp",
+          "port": 11434,
+          "cidr": "10.9.2.0/24",
+          "justification": "model inference calls from the task to the private model endpoint subnet are the only outbound traffic the service needs"
+        }
+      ]
+    }
+  ],
+  "task": {
+    "subnet": "subnet-0fde9001app",
+    "security_group": "sg-0fde9001risk",
+    "model_endpoint": {"cidr": "10.9.2.0/24", "port": 11434}
+  }
+}
