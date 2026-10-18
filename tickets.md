@@ -1,4 +1,4 @@
-# Tickets: risk-agent-deploy (Week 9 lab)
+# Tickets: aws-upload (Week 9 lab)
 
 Tracer-bullet tickets building the Week 9 deliverable: one Week 8 agent
 deployed to a simulated AWS environment and to a simulated on-prem Ollama

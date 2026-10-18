@@ -212,7 +212,7 @@ def build_cover() -> str:
         '<div class="line">No cloud service is used or called anywhere in this '
         "work; both targets are local simulations and are labeled as such in "
         "every artifact.</div>"
-        '<div class="line repo">github.com/kenmann01/risk-agent-deploy</div>'
+        '<div class="line repo">github.com/kenmann01/aws-upload</div>'
         '<div class="toc-title">Contents</div>'
         f"<table>{toc_rows}</table>"
         "</div>"

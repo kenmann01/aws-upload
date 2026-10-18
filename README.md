@@ -1,4 +1,4 @@
-# risk-agent-deploy
+# aws-upload
 
 Week 9 lab (GenSpark FDE course): take ONE agent from the Week 8 multi-agent
 underwriting pipeline and deploy it two ways, then document and compare the
