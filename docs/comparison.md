@@ -68,16 +68,24 @@ the case low underwriting risk. Usage was `model=qwen3:8b input_tokens=218
 output_tokens=152 duration_ms=10028.1`. The factor points sum to the score,
 so validation accepted the result (exhibit 3).
 
+The on-prem deployment itself ran and validated on this input with the
+resident qwen3:8b: score 15, the same three factors, 218/152 tokens,
+9538.4 ms (exhibit 6, first capture). The on-prem side therefore runs
+successfully and produces reasonable output; the smaller-model observation
+below is what the brief asks to note on top of that.
+
 The on-prem qwen3:4b run produced no score. After the one allowed repair
 call, the reply was still not JSON (`invalid JSON from model after repair:
 Expecting value: line 1 column 1 (char 0)`). The transcript records that
 error and then the shared input hash. It has no factor breakdown and no
 usage line, because usage is printed only after a validated result
-(exhibit 6).
+(exhibit 6, second capture).
 
 That is the measured quality difference on this input. The 8B model matched
-the reference. The 4B model failed schema discipline, and the service refused
-the reply instead of recording a score.
+the reference on both targets. The 4B model failed schema discipline, and the
+service refused the reply instead of recording a score, which is the
+factor-sum guardrail doing its job: a score that cannot explain itself never
+reaches the transcript.
 
 ## Recommendation
 
