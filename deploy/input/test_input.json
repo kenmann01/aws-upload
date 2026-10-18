@@ -1,0 +1,52 @@
+{
+  "description": "Frozen test input for BOTH deployments (lab rubric: both confirmed working on the same test input). These are the real intake and enrichment states produced by qwen3:8b in the Week 8 pipeline run. The service reads only the intake and enrichment keys; expected_week8_risk_output is a human reference, never read by code.",
+  "source": "kenmann01/insurance-orchestrator trace 4b9f20251da84cb5ac6e9d78f9f8b0f5, CASE-001 (Dana Whitfield), recorded 2026-10-12, commit c0fd857",
+  "intake": {
+    "applicant_name": "Dana Whitfield",
+    "date_of_birth": "1990-04-12",
+    "product": "auto",
+    "coverage_amount": 42000.0,
+    "stated_income": 78000.0,
+    "missing_fields": [],
+    "notes": [
+      "No prior claims. Vehicle is 3 years old."
+    ]
+  },
+  "enrichment": {
+    "credit_band": "a",
+    "prior_claims_count": 0,
+    "asset_age_years": 3.0,
+    "flags": [
+      "No prior claims"
+    ],
+    "notes": [
+      "Vehicle is 3 years old"
+    ]
+  },
+  "expected_week8_risk_output": {
+    "score": 15,
+    "factors": [
+      {
+        "name": "Credit Band",
+        "points": 5,
+        "detail": "Credit band 'A' indicates strong creditworthiness, which reduces underwriting risk."
+      },
+      {
+        "name": "No Prior Claims",
+        "points": 5,
+        "detail": "No prior claims history suggests a lower likelihood of future claims."
+      },
+      {
+        "name": "Vehicle Age",
+        "points": 5,
+        "detail": "Vehicle is 3 years old, which is within a reasonable age range for risk assessment."
+      }
+    ],
+    "rationale": "The applicant has a strong credit band, no prior claims, and a vehicle that is 3 years old. These factors collectively indicate a low underwriting risk.",
+    "usage": {
+      "input_tokens": 218,
+      "output_tokens": 152,
+      "model": "qwen3:8b"
+    }
+  }
+}

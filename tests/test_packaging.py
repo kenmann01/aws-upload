@@ -7,3 +7,7 @@ def test_both_packages_importable():
 
     assert "deployable" in riskservice.__doc__
     assert "simulation" in simaws.__doc__
+
+
+def test_python_dash_m_entrypoint_module_imports():
+    import riskservice.__main__  # noqa: F401
