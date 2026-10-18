@@ -28,5 +28,5 @@ testpaths = ["tests"]
 source = ["src/riskservice", "src/simaws"]
 
 [tool.coverage.report]
-fail_under = 97
+fail_under = 100
 show_missing = true
