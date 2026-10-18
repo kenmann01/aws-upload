@@ -1,0 +1,48 @@
+{
+  "role_name": "risk-service-task",
+  "arn": "arn:simaws:iam::000000000000:role/risk-service-task",
+  "trust_principal": "ecs-tasks.amazonaws.com",
+  "policies": {
+    "risk-service-task-policy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "PullServiceImage",
+          "Effect": "Allow",
+          "Action": [
+            "ecr:GetAuthorizationToken",
+            "ecr:BatchGetImage",
+            "ecr:GetDownloadUrlForLayer"
+          ],
+          "Resource": [
+            "arn:simaws:ecr:local:000000000000:repository/risk-service"
+          ],
+          "justification": "the task must pull exactly its own service image from the one repository it runs from; no other repository and no write actions, because a task that can write its own image source or read another service's images is a lateral-movement risk"
+        },
+        {
+          "Sid": "WriteTaskLogs",
+          "Effect": "Allow",
+          "Action": [
+            "logs:CreateLogStream",
+            "logs:PutLogEvents"
+          ],
+          "Resource": [
+            "arn:simaws:logs:local:000000000000:log-group:/simaws/risk-service"
+          ],
+          "justification": "the task appends its own run output to the service log group so the deployment can be audited; read and delete stay with operators, not with the workload"
+        },
+        {
+          "Sid": "CallModelEndpoint",
+          "Effect": "Allow",
+          "Action": [
+            "bedrock:InvokeModel"
+          ],
+          "Resource": [
+            "arn:simaws:bedrock:local:000000000000:foundation-model/managed-endpoint-simulator"
+          ],
+          "justification": "in a real AWS deployment the model call would be InvokeModel on one specific Bedrock model id, keeping model access under the same IAM model as everything else; this simulation routes that call to the private Ollama endpoint gated by the security group egress rule instead, and the simulator does not enforce this statement"
+        }
+      ]
+    }
+  }
+}

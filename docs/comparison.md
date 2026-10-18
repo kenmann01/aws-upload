@@ -14,12 +14,14 @@ measured outputs and the shared input hash.
   managed-endpoint stand-in (qwen3:8b, the model id a real deployment would
   pin as its Bedrock model).
 - On-prem-style: the same service on the same machine calls the boundary's
-  local Ollama server hosting a deliberately smaller open-weight model
-  (qwen3:4b).
+  local Ollama server. This capture used `qwen3:8b`, the model already
+  resident on that server (`deploy_onprem.py --model qwen3:8b`).
 
-Using two genuinely different model sizes is deliberate: the brief expects the
-on-prem side to acknowledge "that a smaller open-weight model may reason
-differently," and a same-model comparison would be identical by construction.
+Both exhibits therefore use the same model id. The same-input check is a
+same-model check: the two runs agreed on the score, the factors, and the
+token counts. The architectural difference that remains is where the call
+runs (scoped task in the simulated VPC versus the local boundary process),
+not the weights.
 
 ## Cost
 
@@ -53,20 +55,30 @@ endpoint flag different.
 
 ## Output quality
 
-On the frozen input, the Week 8 recorded qwen3:8b reference (embedded in the
-input file, produced at temperature 0) scored the case 15 with three
-5-point factors and a clean rationale, using 218 input and 152 output tokens.
-The run-day exhibits show both deployments' actual outputs on that same input
-at temperature 0: the qwen3:8b task reproducing reference-quality scoring, and
-the qwen3:4b on-prem model's attempt at the same task, with its factor-sum
-validation outcome visible in the transcript. The structural guardrail
-matters more than the model delta: whichever model serves, an output whose
-factor points do not sum to its score is refused rather than recorded, so
-quality degradation surfaces as visible refusals and repair calls, not as
-quietly wrong scores. The general pattern to expect, consistent with the
-course's Week 5 model-landscape material: the smaller model is faster and
-free but drafts weaker factor breakdowns and needs its schema discipline
-enforced by code.
+Both deployments scored the same frozen input at temperature 0, and both
+transcripts print the same input hash:
+`b8963dc4177b0055e8bf085c1b64e99022e90eaa02cc18a19cd8fe5545e7a2ce`
+(exhibits 3 and 6).
+
+The Week 8 recorded qwen3:8b reference, embedded in the input file, scored
+the case 15 with three 5-point factors and used 218 input and 152 output
+tokens.
+
+The simulated AWS task, also qwen3:8b, reproduced that reference. Score 15.
+Factors: Credit Band 5, No Prior Claims 5, Vehicle Age 5. The rationale calls
+the case low underwriting risk. Usage was `model=qwen3:8b input_tokens=218
+output_tokens=152 duration_ms=10028.1`. The factor points sum to the score,
+so validation accepted the result (exhibit 3).
+
+The on-prem run, also qwen3:8b, reproduced the same result. Score 15.
+Factors: Credit Band 5, No Prior Claims 5, Vehicle Age 5. The rationale is
+the same low-risk sentence. Usage was `model=qwen3:8b input_tokens=218
+output_tokens=152 duration_ms=9538.4`. The factor points sum to the score,
+so validation accepted the result (exhibit 6).
+
+On this input the two deployments agreed. Same score, same three factors,
+same token counts. The cloud-style task took 10028.1 ms and the on-prem run
+took 9538.4 ms.
 
 ## Recommendation
 

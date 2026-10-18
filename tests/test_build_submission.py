@@ -36,10 +36,20 @@ def test_build_html_has_eight_sections_and_pending_boxes():
     html = bs.build_html()
     for title in SECTION_TITLES:
         assert title in html, f"missing section heading {title!r}"
-    # All four evidence/*.txt files are absent from this checkout, but
-    # evidence/aws_sim_run.txt backs sections 2, 3, and 4, so the page
-    # renders six PENDING boxes, one per missing exhibit.
-    assert html.count('class="pending"') == 6
+    evidence = [
+        "evidence/iam_role.txt",
+        "evidence/aws_sim_run.txt",
+        "evidence/ollama_setup.txt",
+        "evidence/onprem_run.txt",
+    ]
+    # aws_sim_run.txt backs sections 2, 3, and 4, so a checkout missing all
+    # four files renders six PENDING boxes. Once the transcripts are captured,
+    # those boxes are gone and the shared input hash is in the page.
+    if all((bs.ROOT / rel).is_file() for rel in evidence):
+        assert 'class="pending"' not in html
+        assert "input_sha256:" in html
+    else:
+        assert html.count('class="pending"') == 6
 
 
 def test_phase_slice_missing_file_returns_pending():

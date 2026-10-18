@@ -1,0 +1,61 @@
+=== simulated AWS deployment of the risk scoring service ===
+simulation notice: this deployment runs entirely on the local simaws control plane; no cloud service is contacted and no cloud account exists
+[1/5] NETWORK validate placement
+  PASS
+  vpc vpc-0fde9001 (10.9.0.0/16)
+  subnets:
+    subnet-0fde9001public  10.9.0.0/24  PUBLIC
+    subnet-0fde9001app  10.9.1.0/24  private  <- task placement
+    subnet-0fde9001model  10.9.2.0/24  private
+  security groups:
+    sg-0fde9001risk  risk scoring task: no ingress, single-purpose egress to the model endpoint
+      ingress: none (the service accepts no inbound traffic)
+      egress tcp 11434 to 10.9.2.0/24
+        why: model inference calls from the task to the private model endpoint subnet are the only outbound traffic the service needs
+  model endpoint: 10.9.2.0/24:11434 (simulated managed model service)
+[2/5] IAM least-privilege task role
+  created role arn:simaws:iam::000000000000:role/risk-service-task
+  attached policy risk-service-task-policy (least-privilege linter passed):
+    PullServiceImage: ecr:GetAuthorizationToken, ecr:BatchGetImage, ecr:GetDownloadUrlForLayer
+    WriteTaskLogs: logs:CreateLogStream, logs:PutLogEvents
+    CallModelEndpoint: bedrock:InvokeModel
+[3/5] ECR build and push image
+  created repository 000000000000.dkr.simaws.local/risk-service
+  pushed risk-service:v1 digest sha256:0cc035f0333d9dd71622832c345c350a94efeb1b4a9bb2112162d6012cc6fd25 (source-archive)
+[4/5] ECS register task definition and run task
+  task arn:simaws:ecs:local:000000000000:task/risk-service/d7e33cf53d44
+  status: STOPPED  exit code: 0
+[5/5] RESULT task log
+task arn:simaws:ecs:local:000000000000:task/risk-service/d7e33cf53d44
+started: 2026-10-18T19:25:59+00:00
+image: risk-service:v1 @ sha256:0cc035f0333d9dd71622832c345c350a94efeb1b4a9bb2112162d6012cc6fd25 (source-archive)
+role: arn:simaws:iam::000000000000:role/risk-service-task (image pull and log write actions verified)
+placement: subnet subnet-0fde9001app / security group sg-0fde9001risk
+model endpoint: 10.9.2.0/24:11434 (simulated managed model service)
+command: /workspace/aws-upload/.venv/bin/python -m riskservice --input /workspace/aws-upload/deploy/input/test_input.json --backend ollama
+------------------------------------------------------------------------
+input: test_input.json
+{
+  "score": 15,
+  "factors": [
+    {
+      "name": "Credit Band",
+      "points": 5,
+      "detail": "Credit band 'A' indicates strong creditworthiness, which reduces underwriting risk."
+    },
+    {
+      "name": "No Prior Claims",
+      "points": 5,
+      "detail": "No prior claims history suggests a lower likelihood of future claims."
+    },
+    {
+      "name": "Vehicle Age",
+      "points": 5,
+      "detail": "Vehicle is 3 years old, which is within a reasonable age range for risk assessment."
+    }
+  ],
+  "rationale": "The applicant has a strong credit band, no prior claims, and a vehicle that is 3 years old. These factors collectively indicate a low underwriting risk."
+}
+usage: model=qwen3:8b input_tokens=218 output_tokens=152 duration_ms=10028.1
+input_sha256: b8963dc4177b0055e8bf085c1b64e99022e90eaa02cc18a19cd8fe5545e7a2ce
+simulation notice: this deployment runs entirely on the local simaws control plane; no cloud service is contacted and no cloud account exists

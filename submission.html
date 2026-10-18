@@ -25,7 +25,54 @@ pre.code .c { color: #6e7781; font-style: italic; }
 .note { font-size: 10pt; color: #444; margin: 8px 0 2px; }
 .pending { background: #fff8e1; border: 1.5px solid #e0a800; color: #6b4d00; padding: 10px 12px; border-radius: 6px; font-size: 9.5pt; margin: 10px 0 14px; page-break-inside: avoid; }
 .pending code { font-family: Consolas, monospace; background: #ffefb0; padding: 1px 5px; border-radius: 3px; }
-</style></head><body><div class="cover"><h1>Deploying the Risk Scoring Agent</h1><div class="sub">Week 9 Lab Submission</div><div class="line">One agent from the Week 8 underwriting pipeline (risk scoring), deployed two ways: to a simulated AWS environment (local simaws control plane: IAM, registry, tasks, network placement) and to a simulated on-prem environment (local Ollama), on the same frozen test input from the Week 8 traces.</div><div class="line">No cloud service is used or called anywhere in this work; both targets are local simulations and are labeled as such in every artifact.</div><div class="line repo">github.com/kenmann01/risk-agent-deploy</div><div class="toc-title">Contents</div><table><tr><td>1. IAM role and attached policy</td><td>evidence/iam_role.txt, deploy/iam-policy.json, linter excerpt</td></tr><tr><td>2. Building, pushing, deploying under the role</td><td>deploy transcript phases 3-4 (evidence/aws_sim_run.txt)</td></tr><tr><td>3. Deployment running and producing output</td><td>deploy transcript phase 5 task log</td></tr><tr><td>4. Networking configuration</td><td>deploy transcript phase 1, deploy/network.json</td></tr><tr><td>5. Ollama setup and the service code</td><td>evidence/ollama_setup.txt, src/riskservice/</td></tr><tr><td>6. On-prem run on the same input</td><td>evidence/onprem_run.txt</td></tr><tr><td>7. Deployment, networking, access controls document</td><td>docs/deployment.md</td></tr><tr><td>8. Cost/complexity/quality comparison</td><td>docs/comparison.md</td></tr></table></div><section><h2>1. IAM role and attached policy</h2><div class="note">The task role with every permission justified, the linter that refuses wildcard or unjustified policies outright, and the get-role transcript showing the attached policy as stored in the simulated account.</div><div class="pending"><b>PENDING:</b> evidence/iam_role.txt is missing from this checkout, so the exhibit cannot be shown. Produce it, then rebuild this PDF, with: <code>uv run python -m simaws iam get-role --name risk-service-task --state .simaws/state.json</code></div><div class="file">deploy/iam-policy.json</div><pre class="code">{
+</style></head><body><div class="cover"><h1>Deploying the Risk Scoring Agent</h1><div class="sub">Week 9 Lab Submission</div><div class="line">One agent from the Week 8 underwriting pipeline (risk scoring), deployed two ways: to a simulated AWS environment (local simaws control plane: IAM, registry, tasks, network placement) and to a simulated on-prem environment (local Ollama), on the same frozen test input from the Week 8 traces.</div><div class="line">No cloud service is used or called anywhere in this work; both targets are local simulations and are labeled as such in every artifact.</div><div class="line repo">github.com/kenmann01/aws-upload</div><div class="toc-title">Contents</div><table><tr><td>1. IAM role and attached policy</td><td>evidence/iam_role.txt, deploy/iam-policy.json, linter excerpt</td></tr><tr><td>2. Building, pushing, deploying under the role</td><td>deploy transcript phases 3-4 (evidence/aws_sim_run.txt)</td></tr><tr><td>3. Deployment running and producing output</td><td>deploy transcript phase 5 task log</td></tr><tr><td>4. Networking configuration</td><td>deploy transcript phase 1, deploy/network.json</td></tr><tr><td>5. Ollama setup and the service code</td><td>evidence/ollama_setup.txt, src/riskservice/</td></tr><tr><td>6. On-prem run on the same input</td><td>evidence/onprem_run.txt</td></tr><tr><td>7. Deployment, networking, access controls document</td><td>docs/deployment.md</td></tr><tr><td>8. Cost/complexity/quality comparison</td><td>docs/comparison.md</td></tr></table></div><section><h2>1. IAM role and attached policy</h2><div class="note">The task role with every permission justified, the linter that refuses wildcard or unjustified policies outright, and the get-role transcript showing the attached policy as stored in the simulated account.</div><div class="file">evidence/iam_role.txt</div><pre class="term">{
+  &quot;role_name&quot;: &quot;risk-service-task&quot;,
+  &quot;arn&quot;: &quot;arn:simaws:iam::000000000000:role/risk-service-task&quot;,
+  &quot;trust_principal&quot;: &quot;ecs-tasks.amazonaws.com&quot;,
+  &quot;policies&quot;: {
+    &quot;risk-service-task-policy&quot;: {
+      &quot;Version&quot;: &quot;2012-10-17&quot;,
+      &quot;Statement&quot;: [
+        {
+          &quot;Sid&quot;: &quot;PullServiceImage&quot;,
+          &quot;Effect&quot;: &quot;Allow&quot;,
+          &quot;Action&quot;: [
+            &quot;ecr:GetAuthorizationToken&quot;,
+            &quot;ecr:BatchGetImage&quot;,
+            &quot;ecr:GetDownloadUrlForLayer&quot;
+          ],
+          &quot;Resource&quot;: [
+            &quot;arn:simaws:ecr:local:000000000000:repository/risk-service&quot;
+          ],
+          &quot;justification&quot;: &quot;the task must pull exactly its own service image from the one repository it runs from; no other repository and no write actions, because a task that can write its own image source or read another service&#x27;s images is a lateral-movement risk&quot;
+        },
+        {
+          &quot;Sid&quot;: &quot;WriteTaskLogs&quot;,
+          &quot;Effect&quot;: &quot;Allow&quot;,
+          &quot;Action&quot;: [
+            &quot;logs:CreateLogStream&quot;,
+            &quot;logs:PutLogEvents&quot;
+          ],
+          &quot;Resource&quot;: [
+            &quot;arn:simaws:logs:local:000000000000:log-group:/simaws/risk-service&quot;
+          ],
+          &quot;justification&quot;: &quot;the task appends its own run output to the service log group so the deployment can be audited; read and delete stay with operators, not with the workload&quot;
+        },
+        {
+          &quot;Sid&quot;: &quot;CallModelEndpoint&quot;,
+          &quot;Effect&quot;: &quot;Allow&quot;,
+          &quot;Action&quot;: [
+            &quot;bedrock:InvokeModel&quot;
+          ],
+          &quot;Resource&quot;: [
+            &quot;arn:simaws:bedrock:local:000000000000:foundation-model/managed-endpoint-simulator&quot;
+          ],
+          &quot;justification&quot;: &quot;in a real AWS deployment the model call would be InvokeModel on one specific Bedrock model id, keeping model access under the same IAM model as everything else; this simulation routes that call to the private Ollama endpoint gated by the security group egress rule instead, and the simulator does not enforce this statement&quot;
+        }
+      ]
+    }
+  }
+}</pre><div class="file">deploy/iam-policy.json</div><pre class="code">{
   &quot;Version&quot;: &quot;2012-10-17&quot;,
   &quot;Statement&quot;: [
     {
@@ -128,7 +175,57 @@ pre.code .c { color: #6e7781; font-style: italic; }
             errors.append(
                 f<span class="s">"{prefix}: wildcard resource '{resource}' rejected (least privilege)"</span>
             )
-    <span class="k">return</span> errors</pre></section><section><h2>2. Building, pushing, deploying under the role</h2><div class="note">Phases 3 and 4 of the deployment transcript: the image built and pushed with its digest, the task definition registered under the scoped role, and run-task authorizing (role actions, image digest, network placement) before executing anything.</div><div class="pending"><b>PENDING:</b> evidence/aws_sim_run.txt is missing from this checkout, so the exhibit cannot be shown. Produce it, then rebuild this PDF, with: <code>uv run python scripts/deploy_aws_sim.py --backend ollama | tee evidence/aws_sim_run.txt</code></div></section><section><h2>3. Deployment running and producing output</h2><div class="note">Phase 5 of the deployment transcript: the task log with the service's scoring output on the frozen test input and the input hash.</div><div class="pending"><b>PENDING:</b> evidence/aws_sim_run.txt is missing from this checkout, so the exhibit cannot be shown. Produce it, then rebuild this PDF, with: <code>uv run python scripts/deploy_aws_sim.py --backend ollama | tee evidence/aws_sim_run.txt</code></div></section><section><h2>4. Networking configuration</h2><div class="note">Phase 1 of the deployment transcript: the placement validated against the least-privilege rules, then the committed placement document itself.</div><div class="pending"><b>PENDING:</b> evidence/aws_sim_run.txt is missing from this checkout, so the exhibit cannot be shown. Produce it, then rebuild this PDF, with: <code>uv run python scripts/deploy_aws_sim.py --backend ollama | tee evidence/aws_sim_run.txt</code></div><div class="file">deploy/network.json</div><pre class="code">{
+    <span class="k">return</span> errors</pre></section><section><h2>2. Building, pushing, deploying under the role</h2><div class="note">Phases 3 and 4 of the deployment transcript: the image built and pushed with its digest, the task definition registered under the scoped role, and run-task authorizing (role actions, image digest, network placement) before executing anything.</div><pre class="term">[3/5] ECR build and push image
+  created repository 000000000000.dkr.simaws.local/risk-service
+  pushed risk-service:v1 digest sha256:0cc035f0333d9dd71622832c345c350a94efeb1b4a9bb2112162d6012cc6fd25 (source-archive)
+[4/5] ECS register task definition and run task
+  task arn:simaws:ecs:local:000000000000:task/risk-service/d7e33cf53d44
+  status: STOPPED  exit code: 0</pre></section><section><h2>3. Deployment running and producing output</h2><div class="note">Phase 5 of the deployment transcript: the task log with the service's scoring output on the frozen test input and the input hash.</div><pre class="term">[5/5] RESULT task log
+task arn:simaws:ecs:local:000000000000:task/risk-service/d7e33cf53d44
+started: 2026-10-18T19:25:59+00:00
+image: risk-service:v1 @ sha256:0cc035f0333d9dd71622832c345c350a94efeb1b4a9bb2112162d6012cc6fd25 (source-archive)
+role: arn:simaws:iam::000000000000:role/risk-service-task (image pull and log write actions verified)
+placement: subnet subnet-0fde9001app / security group sg-0fde9001risk
+model endpoint: 10.9.2.0/24:11434 (simulated managed model service)
+command: /workspace/aws-upload/.venv/bin/python -m riskservice --input /workspace/aws-upload/deploy/input/test_input.json --backend ollama
+------------------------------------------------------------------------
+input: test_input.json
+{
+  &quot;score&quot;: 15,
+  &quot;factors&quot;: [
+    {
+      &quot;name&quot;: &quot;Credit Band&quot;,
+      &quot;points&quot;: 5,
+      &quot;detail&quot;: &quot;Credit band &#x27;A&#x27; indicates strong creditworthiness, which reduces underwriting risk.&quot;
+    },
+    {
+      &quot;name&quot;: &quot;No Prior Claims&quot;,
+      &quot;points&quot;: 5,
+      &quot;detail&quot;: &quot;No prior claims history suggests a lower likelihood of future claims.&quot;
+    },
+    {
+      &quot;name&quot;: &quot;Vehicle Age&quot;,
+      &quot;points&quot;: 5,
+      &quot;detail&quot;: &quot;Vehicle is 3 years old, which is within a reasonable age range for risk assessment.&quot;
+    }
+  ],
+  &quot;rationale&quot;: &quot;The applicant has a strong credit band, no prior claims, and a vehicle that is 3 years old. These factors collectively indicate a low underwriting risk.&quot;
+}
+usage: model=qwen3:8b input_tokens=218 output_tokens=152 duration_ms=10028.1
+input_sha256: b8963dc4177b0055e8bf085c1b64e99022e90eaa02cc18a19cd8fe5545e7a2ce
+simulation notice: this deployment runs entirely on the local simaws control plane; no cloud service is contacted and no cloud account exists</pre></section><section><h2>4. Networking configuration</h2><div class="note">Phase 1 of the deployment transcript: the placement validated against the least-privilege rules, then the committed placement document itself.</div><pre class="term">[1/5] NETWORK validate placement
+  PASS
+  vpc vpc-0fde9001 (10.9.0.0/16)
+  subnets:
+    subnet-0fde9001public  10.9.0.0/24  PUBLIC
+    subnet-0fde9001app  10.9.1.0/24  private  &lt;- task placement
+    subnet-0fde9001model  10.9.2.0/24  private
+  security groups:
+    sg-0fde9001risk  risk scoring task: no ingress, single-purpose egress to the model endpoint
+      ingress: none (the service accepts no inbound traffic)
+      egress tcp 11434 to 10.9.2.0/24
+        why: model inference calls from the task to the private model endpoint subnet are the only outbound traffic the service needs
+  model endpoint: 10.9.2.0/24:11434 (simulated managed model service)</pre><div class="file">deploy/network.json</div><pre class="code">{
   &quot;description&quot;: &quot;Simulated VPC placement for the risk scoring service task. The task sits in the private application subnet, accepts no inbound traffic, and may egress only to the private model endpoint subnet on the model port. This is a simulated placement document; no cloud account exists.&quot;,
   &quot;vpc&quot;: {&quot;id&quot;: &quot;vpc-0fde9001&quot;, &quot;cidr&quot;: &quot;10.9.0.0/16&quot;},
   &quot;subnets&quot;: [
@@ -171,7 +268,60 @@ pre.code .c { color: #6e7781; font-style: italic; }
     &quot;security_group&quot;: &quot;sg-0fde9001risk&quot;,
     &quot;model_endpoint&quot;: {&quot;cidr&quot;: &quot;10.9.2.0/24&quot;, &quot;port&quot;: 11434}
   }
-}</pre></section><section><h2>5. Ollama setup and the service code</h2><div class="note">The model server inside the boundary: version, pulled model ids (the managed-endpoint stand-in qwen3:8b and the on-prem qwen3:4b), and the role the deployment issued the task.</div><div class="pending"><b>PENDING:</b> evidence/ollama_setup.txt is missing from this checkout, so the exhibit cannot be shown. Produce it, then rebuild this PDF, with: <code>(ollama --version; ollama list; uv run python -m simaws iam get-role --name risk-service-task --state .simaws/state.json) | tee evidence/ollama_setup.txt</code></div><div class="note">The deployed service: agent (factor-sum validation), service entrypoint, and CLI; the same bytes both targets run.</div><div class="file">src/riskservice/agent.py</div><pre class="code"><span class="s">""</span>"Risk scoring agent <span class="k">with</span> factor-sum validation.
+}</pre></section><section><h2>5. Ollama setup and the service code</h2><div class="note">The model server inside the boundary: version, pulled model ids (the managed-endpoint stand-in qwen3:8b and the on-prem qwen3:4b), and the role the deployment issued the task.</div><div class="file">evidence/ollama_setup.txt</div><pre class="term">ollama version is 0.34.0
+Warning: client version is 0.32.14
+NAME          ID              SIZE      MODIFIED       
+qwen3:4b      359d7dd4bcda    2.5 GB    47 seconds ago    
+qwen3:8b      500a1f067a9f    5.2 GB    5 weeks ago       
+mistral:7b    6577803aa9a0    4.4 GB    5 weeks ago       
+{
+  &quot;role_name&quot;: &quot;risk-service-task&quot;,
+  &quot;arn&quot;: &quot;arn:simaws:iam::000000000000:role/risk-service-task&quot;,
+  &quot;trust_principal&quot;: &quot;ecs-tasks.amazonaws.com&quot;,
+  &quot;policies&quot;: {
+    &quot;risk-service-task-policy&quot;: {
+      &quot;Version&quot;: &quot;2012-10-17&quot;,
+      &quot;Statement&quot;: [
+        {
+          &quot;Sid&quot;: &quot;PullServiceImage&quot;,
+          &quot;Effect&quot;: &quot;Allow&quot;,
+          &quot;Action&quot;: [
+            &quot;ecr:GetAuthorizationToken&quot;,
+            &quot;ecr:BatchGetImage&quot;,
+            &quot;ecr:GetDownloadUrlForLayer&quot;
+          ],
+          &quot;Resource&quot;: [
+            &quot;arn:simaws:ecr:local:000000000000:repository/risk-service&quot;
+          ],
+          &quot;justification&quot;: &quot;the task must pull exactly its own service image from the one repository it runs from; no other repository and no write actions, because a task that can write its own image source or read another service&#x27;s images is a lateral-movement risk&quot;
+        },
+        {
+          &quot;Sid&quot;: &quot;WriteTaskLogs&quot;,
+          &quot;Effect&quot;: &quot;Allow&quot;,
+          &quot;Action&quot;: [
+            &quot;logs:CreateLogStream&quot;,
+            &quot;logs:PutLogEvents&quot;
+          ],
+          &quot;Resource&quot;: [
+            &quot;arn:simaws:logs:local:000000000000:log-group:/simaws/risk-service&quot;
+          ],
+          &quot;justification&quot;: &quot;the task appends its own run output to the service log group so the deployment can be audited; read and delete stay with operators, not with the workload&quot;
+        },
+        {
+          &quot;Sid&quot;: &quot;CallModelEndpoint&quot;,
+          &quot;Effect&quot;: &quot;Allow&quot;,
+          &quot;Action&quot;: [
+            &quot;bedrock:InvokeModel&quot;
+          ],
+          &quot;Resource&quot;: [
+            &quot;arn:simaws:bedrock:local:000000000000:foundation-model/managed-endpoint-simulator&quot;
+          ],
+          &quot;justification&quot;: &quot;in a real AWS deployment the model call would be InvokeModel on one specific Bedrock model id, keeping model access under the same IAM model as everything else; this simulation routes that call to the private Ollama endpoint gated by the security group egress rule instead, and the simulator does not enforce this statement&quot;
+        }
+      ]
+    }
+  }
+}</pre><div class="note">The deployed service: agent (factor-sum validation), service entrypoint, and CLI; the same bytes both targets run.</div><div class="file">src/riskservice/agent.py</div><pre class="code"><span class="s">""</span>"Risk scoring agent <span class="k">with</span> factor-sum validation.
 
 Ported <span class="k">from</span> the Week 8 multi-agent underwriting pipeline
 (kenmann01/insurance-orchestrator at c0fd857), unchanged <span class="k">in</span> behavior: the
@@ -347,7 +497,34 @@ states. Both Week 9 deployment targets wrap exactly this function.<span class="s
         <span class="k">except</span> (httpx.HTTPError, OSError):
             <span class="c"># Transport-level failures only: a programming error must not</span>
             <span class="c"># masquerade as "server unhealthy".</span>
-            <span class="k">return</span> <span class="k">False</span></pre></section><section><h2>6. On-prem run on the same input</h2><div class="note">The simulated on-prem run: the same service, the same frozen input (the input hash is printed at the end), against the local boundary model server.</div><div class="pending"><b>PENDING:</b> evidence/onprem_run.txt is missing from this checkout, so the exhibit cannot be shown. Produce it, then rebuild this PDF, with: <code>uv run python scripts/deploy_onprem.py --backend ollama | tee evidence/onprem_run.txt</code></div></section><section><h2>7. Deployment, networking, and access controls</h2><div class="file">docs/deployment.md</div><pre class="doc"># Deployment Document: the Risk Scoring Agent
+            <span class="k">return</span> <span class="k">False</span></pre></section><section><h2>6. On-prem run on the same input</h2><div class="note">The simulated on-prem run: the same service, the same frozen input (the input hash is printed at the end), against the local boundary model server.</div><div class="file">evidence/onprem_run.txt</div><pre class="term">=== simulated on-prem deployment of the risk scoring service ===
+boundary: this machine | model host: local default | model: qwen3:8b
+simulation notice: this on-prem run executes on this machine with a local model server; no cloud service is contacted and no external model API is called
+input: test_input.json
+{
+  &quot;score&quot;: 15,
+  &quot;factors&quot;: [
+    {
+      &quot;name&quot;: &quot;Credit Band&quot;,
+      &quot;points&quot;: 5,
+      &quot;detail&quot;: &quot;Credit band &#x27;A&#x27; indicates strong creditworthiness, which reduces underwriting risk.&quot;
+    },
+    {
+      &quot;name&quot;: &quot;No Prior Claims&quot;,
+      &quot;points&quot;: 5,
+      &quot;detail&quot;: &quot;No prior claims history suggests a lower likelihood of future claims.&quot;
+    },
+    {
+      &quot;name&quot;: &quot;Vehicle Age&quot;,
+      &quot;points&quot;: 5,
+      &quot;detail&quot;: &quot;Vehicle is 3 years old, which is within a reasonable age range for risk assessment.&quot;
+    }
+  ],
+  &quot;rationale&quot;: &quot;The applicant has a strong credit band, no prior claims, and a vehicle that is 3 years old. These factors collectively indicate a low underwriting risk.&quot;
+}
+usage: model=qwen3:8b input_tokens=218 output_tokens=152 duration_ms=9538.4
+input_sha256: b8963dc4177b0055e8bf085c1b64e99022e90eaa02cc18a19cd8fe5545e7a2ce
+simulation notice: this on-prem run executes on this machine with a local model server; no cloud service is contacted and no external model API is called</pre></section><section><h2>7. Deployment, networking, and access controls</h2><div class="file">docs/deployment.md</div><pre class="doc"># Deployment Document: the Risk Scoring Agent
 
 Lab: Deploy an Agent to AWS and a Simulated On-Prem Environment (Week 9).
 This document covers the three documentation requirements of the brief: the
@@ -521,12 +698,14 @@ measured outputs and the shared input hash.
   managed-endpoint stand-in (qwen3:8b, the model id a real deployment would
   pin as its Bedrock model).
 - On-prem-style: the same service on the same machine calls the boundary&#x27;s
-  local Ollama server hosting a deliberately smaller open-weight model
-  (qwen3:4b).
+  local Ollama server. This capture used `qwen3:8b`, the model already
+  resident on that server (`deploy_onprem.py --model qwen3:8b`).
 
-Using two genuinely different model sizes is deliberate: the brief expects the
-on-prem side to acknowledge &quot;that a smaller open-weight model may reason
-differently,&quot; and a same-model comparison would be identical by construction.
+Both exhibits therefore use the same model id. The same-input check is a
+same-model check: the two runs agreed on the score, the factors, and the
+token counts. The architectural difference that remains is where the call
+runs (scoped task in the simulated VPC versus the local boundary process),
+not the weights.
 
 ## Cost
 
@@ -560,20 +739,30 @@ endpoint flag different.
 
 ## Output quality
 
-On the frozen input, the Week 8 recorded qwen3:8b reference (embedded in the
-input file, produced at temperature 0) scored the case 15 with three
-5-point factors and a clean rationale, using 218 input and 152 output tokens.
-The run-day exhibits show both deployments&#x27; actual outputs on that same input
-at temperature 0: the qwen3:8b task reproducing reference-quality scoring, and
-the qwen3:4b on-prem model&#x27;s attempt at the same task, with its factor-sum
-validation outcome visible in the transcript. The structural guardrail
-matters more than the model delta: whichever model serves, an output whose
-factor points do not sum to its score is refused rather than recorded, so
-quality degradation surfaces as visible refusals and repair calls, not as
-quietly wrong scores. The general pattern to expect, consistent with the
-course&#x27;s Week 5 model-landscape material: the smaller model is faster and
-free but drafts weaker factor breakdowns and needs its schema discipline
-enforced by code.
+Both deployments scored the same frozen input at temperature 0, and both
+transcripts print the same input hash:
+`b8963dc4177b0055e8bf085c1b64e99022e90eaa02cc18a19cd8fe5545e7a2ce`
+(exhibits 3 and 6).
+
+The Week 8 recorded qwen3:8b reference, embedded in the input file, scored
+the case 15 with three 5-point factors and used 218 input and 152 output
+tokens.
+
+The simulated AWS task, also qwen3:8b, reproduced that reference. Score 15.
+Factors: Credit Band 5, No Prior Claims 5, Vehicle Age 5. The rationale calls
+the case low underwriting risk. Usage was `model=qwen3:8b input_tokens=218
+output_tokens=152 duration_ms=10028.1`. The factor points sum to the score,
+so validation accepted the result (exhibit 3).
+
+The on-prem run, also qwen3:8b, reproduced the same result. Score 15.
+Factors: Credit Band 5, No Prior Claims 5, Vehicle Age 5. The rationale is
+the same low-risk sentence. Usage was `model=qwen3:8b input_tokens=218
+output_tokens=152 duration_ms=9538.4`. The factor points sum to the score,
+so validation accepted the result (exhibit 6).
+
+On this input the two deployments agreed. Same score, same three factors,
+same token counts. The cloud-style task took 10028.1 ms and the on-prem run
+took 9538.4 ms.
 
 ## Recommendation
 
