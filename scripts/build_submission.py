@@ -246,6 +246,7 @@ pre.code .c { color: #6e7781; font-style: italic; }
 .note { font-size: 10pt; color: #444; margin: 8px 0 2px; }
 .pending { background: #fff8e1; border: 1.5px solid #e0a800; color: #6b4d00; padding: 10px 12px; border-radius: 6px; font-size: 9.5pt; margin: 10px 0 14px; page-break-inside: avoid; }
 .pending code { font-family: Consolas, monospace; background: #ffefb0; padding: 1px 5px; border-radius: 3px; }
+.keep { page-break-inside: avoid; }
 """
 
 
@@ -306,8 +307,10 @@ def build_html() -> str:
         "validated against the least-privilege rules, then the committed "
         "placement document itself.</div>"
         + phase_slice(AWS_RUN, "[1/5]", "[2/5]", AWS_DEPLOY_CMD)
+        + '<div class="keep">'
         + file_label("deploy/network.json")
         + plain_block(read("deploy/network.json"))
+        + "</div>"
     )
     p.append(section(4, "Networking configuration", body4))
 
