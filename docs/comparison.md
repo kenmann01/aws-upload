@@ -14,14 +14,12 @@ measured outputs and the shared input hash.
   managed-endpoint stand-in (qwen3:8b, the model id a real deployment would
   pin as its Bedrock model).
 - On-prem-style: the same service on the same machine calls the boundary's
-  local Ollama server. This capture used `qwen3:8b`, the model already
-  resident on that server (`deploy_onprem.py --model qwen3:8b`).
+  local Ollama server hosting a deliberately smaller open-weight model
+  (qwen3:4b).
 
-Both exhibits therefore use the same model id. The same-input check is a
-same-model check: the two runs agreed on the score, the factors, and the
-token counts. The architectural difference that remains is where the call
-runs (scoped task in the simulated VPC versus the local boundary process),
-not the weights.
+Using two genuinely different model sizes is deliberate: the brief expects the
+on-prem side to acknowledge that a smaller open-weight model may reason
+differently, and a same-model comparison would be identical by construction.
 
 ## Cost
 
@@ -70,15 +68,16 @@ the case low underwriting risk. Usage was `model=qwen3:8b input_tokens=218
 output_tokens=152 duration_ms=10028.1`. The factor points sum to the score,
 so validation accepted the result (exhibit 3).
 
-The on-prem run, also qwen3:8b, reproduced the same result. Score 15.
-Factors: Credit Band 5, No Prior Claims 5, Vehicle Age 5. The rationale is
-the same low-risk sentence. Usage was `model=qwen3:8b input_tokens=218
-output_tokens=152 duration_ms=9538.4`. The factor points sum to the score,
-so validation accepted the result (exhibit 6).
+The on-prem qwen3:4b run produced no score. After the one allowed repair
+call, the reply was still not JSON (`invalid JSON from model after repair:
+Expecting value: line 1 column 1 (char 0)`). The transcript records that
+error and then the shared input hash. It has no factor breakdown and no
+usage line, because usage is printed only after a validated result
+(exhibit 6).
 
-On this input the two deployments agreed. Same score, same three factors,
-same token counts. The cloud-style task took 10028.1 ms and the on-prem run
-took 9538.4 ms.
+That is the measured quality difference on this input. The 8B model matched
+the reference. The 4B model failed schema discipline, and the service refused
+the reply instead of recording a score.
 
 ## Recommendation
 
