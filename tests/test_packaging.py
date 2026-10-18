@@ -9,5 +9,6 @@ def test_both_packages_importable():
     assert "simulation" in simaws.__doc__
 
 
-def test_python_dash_m_entrypoint_module_imports():
+def test_python_dash_m_entrypoint_modules_import():
     import riskservice.__main__  # noqa: F401
+    import simaws.__main__  # noqa: F401

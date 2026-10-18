@@ -129,3 +129,20 @@ def put_role_policy(
         raise IamError("; ".join(errors))
     role["policies"][policy_name] = document
     return document
+
+
+def role_allows(role: dict, action: str, resource: str) -> bool:
+    """True when any attached policy statement grants action on resource.
+
+    Exact-string matching only, matching the linter's no-wildcards rule: a
+    policy that passed the linter can never express a broader grant than the
+    statements it literally contains.
+    """
+    for policy in role["policies"].values():
+        for statement in policy.get("Statement", []):
+            if (
+                action in statement.get("Action", [])
+                and resource in statement.get("Resource", [])
+            ):
+                return True
+    return False
