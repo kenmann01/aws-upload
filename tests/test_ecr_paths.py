@@ -98,6 +98,24 @@ def test_push_image_docker_save_failure_rejected(tmp_path):
         )
 
 
+def test_push_image_auto_mode_falls_back_when_docker_fails(tmp_path, monkeypatch):
+    state = empty_state()
+    ecr.create_repository(state, "risk-service")
+    monkeypatch.setattr("simaws.ecr.shutil.which", lambda name: "/x/docker")
+    runner, _ = _fake_docker_runner(save_writes_artifact=False, build_code=1)
+    image = ecr.push_image(
+        state,
+        "risk-service",
+        "v1",
+        source_dir=REPO_ROOT,
+        images_dir=tmp_path / "images",
+        use_docker=None,
+        runner=runner,
+    )
+    assert image["packaging"] == "source-archive"
+    assert image["digest"].startswith("sha256:")
+
+
 def test_sha256_file_streams_content(tmp_path):
     artifact = tmp_path / "blob.bin"
     artifact.write_bytes(b"stream me")

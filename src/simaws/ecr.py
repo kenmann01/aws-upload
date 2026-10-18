@@ -133,26 +133,42 @@ def push_image(
     docker_mode = resolve_use_docker(use_docker)
     images_dir = Path(images_dir)
     images_dir.mkdir(parents=True, exist_ok=True)
+    image_ref = f"{repo['repository_uri']}:{tag}"
     if docker_mode:
-        image_ref = f"{repo['repository_uri']}:{tag}"
         # Deliberately uncaptured: the build output is part of the deploy
-        # transcript, and tests always inject a fake runner.
-        build = runner(
-            ["docker", "build", "-t", image_ref, str(source_dir)],
-            check=False,
-        )
-        if build.returncode != 0:
-            raise EcrError(f"docker build failed with exit code {build.returncode}")
-        artifact = images_dir / f"{repository}-{tag}.tar"
-        save = runner(
-            ["docker", "save", "-o", str(artifact), image_ref],
-            check=False,
-        )
-        if save.returncode != 0:
-            raise EcrError(f"docker save failed with exit code {save.returncode}")
-        digest = _sha256_file(artifact)
-        packaging = "docker"
-    else:
+        # transcript, and tests always inject a fake runner or use archives.
+        try:
+            build = runner(
+                ["docker", "build", "-t", image_ref, str(source_dir)],
+                check=False,
+            )
+            if build.returncode != 0:
+                raise EcrError(
+                    f"docker build failed with exit code {build.returncode}"
+                )
+            artifact = images_dir / f"{repository}-{tag}.tar"
+            save = runner(
+                ["docker", "save", "-o", str(artifact), image_ref],
+                check=False,
+            )
+            if save.returncode != 0:
+                raise EcrError(
+                    f"docker save failed with exit code {save.returncode}"
+                )
+            digest = _sha256_file(artifact)
+            packaging = "docker"
+        except EcrError:
+            if use_docker is True:
+                # Explicitly forced docker must fail loudly.
+                raise
+            # Auto-detected docker that does not work (daemon down, build
+            # error): degrade to the archive path so the deployment proceeds.
+            print(
+                "  docker packaging unavailable; falling back to source-archive "
+                "packaging with the same digest discipline"
+            )
+            docker_mode = False
+    if not docker_mode:
         artifact = images_dir / f"{repository}-{tag}.tar.gz"
         digest = package_source(Path(source_dir), artifact)
         packaging = "source-archive"
